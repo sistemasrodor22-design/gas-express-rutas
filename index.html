@@ -515,10 +515,10 @@ let state = {
     { id: 'b2', name: 'León — Plaza Mayor',      address: 'Blvd. Torres Landa 1980',      coords: [-101.6890, 21.1220], color: '#ff9800' },
   ],
   destinations: [
-    { id: 'd1', name: 'Base Silao',     address: 'Silao, Gto.',     coords: [-101.4284, 20.9551], color: '#ef5350' },
-    { id: 'd2', name: 'Base Irapuato',  address: 'Irapuato, Gto.',  coords: [-101.3412, 20.6764], color: '#ef5350' },
-    { id: 'd3', name: 'Base Salamanca', address: 'Salamanca, Gto.', coords: [-101.1960, 20.5697], color: '#ef5350' },
-    { id: 'd4', name: 'Celaya',         address: 'Celaya, Gto.',    coords: [-100.8175, 20.5238], color: '#ef5350' },
+    { id: 'd1', name: 'Base Silao',     address: 'Silao, Gto.',     coords: [-101.4284, 20.9551], color: '#ef5350', baseIds: ['b1','b2'] },
+    { id: 'd2', name: 'Base Irapuato',  address: 'Irapuato, Gto.',  coords: [-101.3412, 20.6764], color: '#ef5350', baseIds: ['b1','b2'] },
+    { id: 'd3', name: 'Base Salamanca', address: 'Salamanca, Gto.', coords: [-101.1960, 20.5697], color: '#ef5350', baseIds: ['b1','b2'] },
+    { id: 'd4', name: 'Celaya',         address: 'Celaya, Gto.',    coords: [-100.8175, 20.5238], color: '#ef5350', baseIds: ['b1','b2'] },
   ],
   activeBaseId: 'b1',
 };
@@ -609,7 +609,13 @@ function renderRoutesTab() {
 
   const container = document.getElementById('dest-buttons');
   container.innerHTML = '';
-  state.destinations.forEach(dest => {
+  const activeDests = state.destinations.filter(dest => {
+    // Compatibilidad: si no tiene baseIds, se muestra en todas las bases
+    if (!dest.baseIds || dest.baseIds.length === 0) return true;
+    return dest.baseIds.includes(state.activeBaseId);
+  });
+
+  activeDests.forEach(dest => {
     const btn = document.createElement('button');
     btn.className = 'route-btn';
     btn.id = 'routebtn-' + dest.id;
@@ -623,8 +629,8 @@ function renderRoutesTab() {
     container.appendChild(btn);
   });
 
-  if (state.destinations.length === 0) {
-    container.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:12px;padding:16px;">Sin destinos. Agrégalos en la pestaña DESTINOS.</div>`;
+  if (activeDests.length === 0) {
+    container.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:12px;padding:16px;">Sin destinos para esta base. Asígnalos en la pestaña DESTINOS.</div>`;
   }
 }
 
@@ -661,6 +667,9 @@ function renderDestsTab() {
   const list = document.getElementById('dests-list');
   list.innerHTML = '';
   state.destinations.forEach(dest => {
+    const destBaseIds = dest.baseIds || state.bases.map(b => b.id);
+    const assignedBases = state.bases.filter(b => destBaseIds.includes(b.id));
+    const baseDots = assignedBases.map(b => `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${b.color};margin-right:2px;" title="${b.name}"></span>`).join('');
     const row = document.createElement('div');
     row.className = 'admin-item';
     row.innerHTML = `
@@ -668,6 +677,7 @@ function renderDestsTab() {
       <div class="admin-item-info">
         <div class="admin-item-name">${dest.name}</div>
         <div class="admin-item-sub">${dest.address}</div>
+        <div style="margin-top:3px;">${baseDots}<span style="font-size:9px;color:var(--muted);letter-spacing:0.5px;">${assignedBases.length === 0 ? 'Sin base asignada' : assignedBases.map(b=>b.name).join(', ')}</span></div>
       </div>
       <div class="admin-item-btns">
         <button class="icon-btn edit-icon" onclick="showDestForm('${dest.id}')" title="Editar">✏️</button>
@@ -758,6 +768,13 @@ window.showDestForm = function(id) {
   const dest = id ? state.destinations.find(d => d.id === id) : null;
   const container = document.getElementById('dest-form-container');
   const colorSwatches = COLORS.map(c => `<div class="color-swatch${dest && dest.color===c?' selected':(!dest&&c===COLORS[1]?' selected':'')}" style="background:${c};" data-color="${c}" onclick="selectColor(this,'dest')"></div>`).join('');
+  const destBaseIds = dest ? (dest.baseIds || state.bases.map(b => b.id)) : state.bases.map(b => b.id);
+  const baseCheckboxes = state.bases.map(b => `
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--border);margin-bottom:4px;transition:border-color 0.2s;" class="base-checkbox-label">
+      <input type="checkbox" class="dest-base-check" data-base-id="${b.id}" ${destBaseIds.includes(b.id) ? 'checked' : ''} style="accent-color:var(--red);width:14px;height:14px;cursor:pointer;">
+      <div style="width:8px;height:8px;border-radius:50%;background:${b.color};flex-shrink:0;"></div>
+      <span style="font-size:12px;">${b.name}</span>
+    </label>`).join('');
   container.innerHTML = `
     <div class="form-panel">
       <div class="form-title">
@@ -771,6 +788,11 @@ window.showDestForm = function(id) {
       <div class="form-group">
         <label class="form-label">Dirección / Referencia</label>
         <input class="form-input" id="dest-input-addr" placeholder="Ej: Centro, Guanajuato" value="${dest ? dest.address : ''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bases asignadas</label>
+        <div id="dest-bases-list">${baseCheckboxes}</div>
+        <div class="form-hint">El destino solo aparecerá en las rutas de las bases seleccionadas.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Color del marcador</label>
@@ -808,13 +830,15 @@ window.saveDest = async function() {
   const lng   = parseFloat(document.getElementById('dest-input-lng').value);
   const colorEl = document.querySelector('#dest-color-row .color-swatch.selected');
   const color = colorEl ? colorEl.dataset.color : '#ef5350';
+  const baseIds = [...document.querySelectorAll('.dest-base-check:checked')].map(el => el.dataset.baseId);
   if (!name) { alert('Ingresa un nombre para el destino.'); return; }
   if (isNaN(lat) || isNaN(lng)) { alert('Ingresa coordenadas válidas.'); return; }
+  if (baseIds.length === 0) { alert('Selecciona al menos una base para este destino.'); return; }
   if (editingDestId) {
     const d = state.destinations.find(x => x.id === editingDestId);
-    d.name = name; d.address = addr; d.coords = [lng, lat]; d.color = color;
+    d.name = name; d.address = addr; d.coords = [lng, lat]; d.color = color; d.baseIds = baseIds;
   } else {
-    state.destinations.push({ id: 'd' + Date.now(), name, address: addr, coords: [lng, lat], color });
+    state.destinations.push({ id: 'd' + Date.now(), name, address: addr, coords: [lng, lat], color, baseIds });
   }
   hideDestForm();
   await saveState();
@@ -931,12 +955,16 @@ window.routeTo = async function(destId) {
 //  OPTIMIZED ROUTE
 // ══════════════════════════════════════
 window.routeOptimized = async function() {
-  if (state.destinations.length === 0) { showError('No hay destinos registrados.'); return; }
+  const activeDests = state.destinations.filter(dest => {
+    if (!dest.baseIds || dest.baseIds.length === 0) return true;
+    return dest.baseIds.includes(state.activeBaseId);
+  });
+  if (activeDests.length === 0) { showError('No hay destinos para esta base.'); return; }
   clearRoute(); setActiveRouteBtn(null); showLoading();
   setStatus('Calculando ruta óptima...');
   const base = state.bases.find(b => b.id === state.activeBaseId);
   try {
-    let remaining = [...state.destinations];
+    let remaining = [...activeDests];
     let current   = base.coords;
     let ordered   = [{ name: base.name, coords: current }];
     while (remaining.length > 0) {
@@ -1032,7 +1060,11 @@ function clearDistances() {
 async function preloadDistances() {
   const base = state.bases.find(b => b.id === state.activeBaseId);
   if (!base) return;
-  for (let dest of state.destinations) {
+  const activeDests = state.destinations.filter(dest => {
+    if (!dest.baseIds || dest.baseIds.length === 0) return true;
+    return dest.baseIds.includes(state.activeBaseId);
+  });
+  for (let dest of activeDests) {
     try {
       const r = await getRoute([base.coords, dest.coords]);
       const km = (r.distance/1000).toFixed(1);
@@ -1103,6 +1135,15 @@ onSnapshot(STATE_DOC, async (snap) => {
     state.bases        = data.bases        || state.bases;
     state.destinations = data.destinations || state.destinations;
     state.activeBaseId = data.activeBaseId || state.activeBaseId;
+    // Migración: asignar todos los baseIds a destinos que no tengan el campo
+    let needsMigration = false;
+    state.destinations.forEach(d => {
+      if (!d.baseIds) {
+        d.baseIds = state.bases.map(b => b.id);
+        needsMigration = true;
+      }
+    });
+    if (needsMigration) await saveState();
   } else {
     // Primera vez: guardar los datos por defecto en Firestore
     await saveState();
